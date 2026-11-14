@@ -18,12 +18,14 @@
 
 package org.apache.kylin.metadata.model;
 
+import java.util.HashMap;
 import java.util.Set;
 
 import org.apache.kylin.common.KylinConfig;
 import org.apache.kylin.common.util.TempMetadataBuilder;
 import org.apache.kylin.guava30.shaded.common.collect.ImmutableBiMap;
 import org.apache.kylin.guava30.shaded.common.collect.Lists;
+import org.apache.kylin.metadata.model.graph.JoinsGraph;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -144,6 +146,26 @@ public class NDataModelTest {
         NDataModel model = mgr.getDataModelDesc("89af4ee2-2cdb-4b07-b39e-4c29856309aa");
         Assert.assertEquals("CAL_DT", model.getNameByColumnId(2));
         Assert.assertNull(model.getNameByColumnId(300));
+    }
+
+    @Test
+    public void testPrecomputedJoinsGraph() {
+        NDataModel model = mgr.getDataModelDesc("741ca86a-1f13-46da-a59f-95fb68615e3a");
+        Assert.assertSame(model.getJoinsGraph(), model.getPrecomputedJoinsGraph());
+
+        NDataModel copy = mgr.copyForWrite(model);
+        copy.getJoinTables().stream().filter(join -> "DEFAULT.TEST_ORDER".equals(join.getTable()))
+                .forEach(join -> join.setFlattenable(JoinTableDesc.NORMALIZED));
+        copy.init(config);
+
+        JoinsGraph precomputed = copy.getPrecomputedJoinsGraph();
+        Assert.assertNotSame(copy.getJoinsGraph(), precomputed);
+        Assert.assertFalse(precomputed.getVertexMap().containsKey("TEST_ORDER"));
+        Assert.assertFalse(precomputed.getVertexMap().containsKey("BUYER_ACCOUNT"));
+        Assert.assertFalse(precomputed.getVertexMap().containsKey("BUYER_COUNTRY"));
+
+        Assert.assertFalse(precomputed.match(copy.getJoinsGraph(), new HashMap<>()));
+        Assert.assertTrue(precomputed.match(precomputed, new HashMap<>()));
     }
 
     @Test

@@ -380,6 +380,14 @@ public class OlapContext {
         Map<String, String> tableAliasMap = new HashMap<>();
         boolean matched = joinsGraph.match(model.getJoinsGraph(), tableAliasMap, isInnerJoinPartial,
                 isNonEquivJoinPartial);
+        boolean matchedPrecomputedGraph = false;
+        JoinsGraph precomputedJoinsGraph = model.getPrecomputedJoinsGraph();
+        if (!matched && precomputedJoinsGraph != model.getJoinsGraph()) {
+            tableAliasMap.clear();
+            matchedPrecomputedGraph = joinsGraph.match(precomputedJoinsGraph, tableAliasMap, isInnerJoinPartial,
+                    isNonEquivJoinPartial);
+            matched = matchedPrecomputedGraph;
+        }
         if (!matched) {
             logger.debug("Context joinsGraph missed model {}, model join graph {}", model, model.getJoinsGraph());
             logger.debug("Mismatch nodes - Context {}, Model {}", joinsGraph.unmatched(model.getJoinsGraph()),
@@ -392,8 +400,19 @@ public class OlapContext {
                 this.transformJoinsGraphByFilterConditions();
                 matched = joinsGraph.match(model.getJoinsGraph(), tableAliasMap, isInnerJoinPartial,
                         isNonEquivJoinPartial);
+                if (!matched && precomputedJoinsGraph != model.getJoinsGraph()) {
+                    tableAliasMap.clear();
+                    matched = joinsGraph.match(precomputedJoinsGraph, tableAliasMap, isInnerJoinPartial,
+                            isNonEquivJoinPartial);
+                    matchedPrecomputedGraph = matched;
+                }
                 logger.info("Match result of rewritten joinsGraph of model({}/{}): {}", project, mAlias, matched);
             }
+        }
+
+        if (matchedPrecomputedGraph) {
+            logger.info("Matched model({}/{}) with its precomputed joins graph.", model.getProject(),
+                    model.getAlias());
         }
 
         if (!matched) {

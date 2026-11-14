@@ -310,6 +310,8 @@ public class NDataModel extends RootPersistentEntity {
 
     private JoinsGraph joinsGraph;
 
+    private volatile JoinsGraph precomputedJoinsGraph;
+
     // when set true, cc expression will allow null value
     private boolean isSeekingCCAdvice = false;
 
@@ -979,6 +981,31 @@ public class NDataModel extends RootPersistentEntity {
             joins.add(joinTable.getJoin());
         }
         joinsGraph = new JoinsGraph(rootFactTableRef, joins);
+        precomputedJoinsGraph = buildPrecomputedJoinsGraph();
+    }
+
+    private JoinsGraph buildPrecomputedJoinsGraph() {
+        List<JoinDesc> precomputedJoins = Lists.newArrayList();
+        Set<String> unprecomputedTables = Sets.newHashSet();
+        for (JoinTableDesc joinTable : joinTables) {
+            JoinDesc join = joinTable.getJoin();
+            String fkTableIdentity = join.getFKSide().getTableIdentity();
+            if (!joinTable.isFlattenable() || unprecomputedTables.contains(fkTableIdentity)) {
+                // Join tables under an anti-flatten lookup are not precomputed either.
+                unprecomputedTables.add(joinTable.getTable());
+            } else {
+                precomputedJoins.add(join);
+            }
+        }
+        return precomputedJoins.size() == joinTables.size() ? joinsGraph
+                : new JoinsGraph(rootFactTableRef, precomputedJoins);
+    }
+
+    public JoinsGraph getPrecomputedJoinsGraph() {
+        if (precomputedJoinsGraph == null) {
+            precomputedJoinsGraph = buildPrecomputedJoinsGraph();
+        }
+        return precomputedJoinsGraph;
     }
 
     private void reorderJoins(Map<String, TableDesc> tables) {
